@@ -1,0 +1,60 @@
+doctype html
+html
+	head
+		title= title
+		link(rel='stylesheet', href='/stylesheets/style.css')
+	body
+		h1 socket.io聊天室
+		p#status
+		
+	script(src='/javascripts/jquery.min.js')
+	script(src='https://cdn.socket.io/socket.io-1.4.5.js')
+		
+	script.
+		//启动
+		var socket = io.connect('http://127.0.0.1:3000');
+		
+		//发送消息
+		socket.emit('join', "Mike", function (data) {
+			console.log(data);
+		});
+		
+		//监听
+		socket.on('login', function (data) {
+			console.log(data);
+		});
+		
+		socket.on('user_joined', function (data) {
+			console.log(data);
+		});
+		
+		socket.on('user_left', function (data) {
+			console.log(data);
+		});
+		
+		//修改昵称
+		function change_name(name){
+			socket.emit('change_name', name, function (data) {
+				console.log(data);
+			});
+		}
+		// 监听修改昵称后返回的消息
+		socket.on('name_changed', function (data) {
+			console.log(data);
+		});
+		
+		//发送消息
+		function send_msg(msg){
+			socket.emit('send_msg', msg, function (data) {
+				console.log(data);
+			});
+		}
+		// 监听消息
+		socket.on('msg_sent', function (data) {
+			console.log(data);
+		});
+
+		
+		
+		
+		
