@@ -1,0 +1,206 @@
+doctype html
+html
+	head
+		title= title
+		link(rel='stylesheet', href='/stylesheets/style.css')
+		link(rel='stylesheet', href='/stylesheets/bootstrap.css')
+	body
+		h1 socket.io聊天室
+		p
+			span#status
+			span ，
+			span#roomstatus
+		p#notice.notice
+		
+		a(href='/')
+			[退出] 聊天室
+		
+		hr
+		
+		div
+			h3 聊天记录
+		
+		div.scrollbar#msg.msgbox
+		
+		hr
+		div
+			textarea(id='msgsend' name='msgsend' placeholder='输入消息' rows='4').form-control
+		br
+		div
+			a.btn.btn-primary(onclick="OL_SendMsg()") 发送
+		hr
+		form.form-inline
+			div.form-group
+				input.form-control(id='newnickname' placeholder='新昵称')
+				a.btn.btn-danger(onclick="OL_ModifyNickName()") 修改昵称
+		
+		hr
+		h3 系统消息
+		div#history
+		
+	script(src='/javascripts/jquery.min.js')
+	script(src='https://cdn.socket.io/socket.io-1.4.5.js')
+		
+	script.
+		// 基本功能函数
+		function ol_pad(num, n)
+		{ 
+			num = ""+num
+			var temp = num;
+			
+			for(var i=0;i<(n-num.length);i++)
+			{
+				temp = "0"+temp
+			}	
+			return temp
+		}
+		function GetRequest() { 
+			var url = location.search; //获取url中"?"符后的字串 
+			var theRequest = new Object(); 
+			if (url.indexOf("?") != -1) { 
+				var str = url.substr(1); 
+				strs = str.split("&"); 
+				for(var i = 0; i < strs.length; i ++) { 
+					theRequest[strs[i].split("=")[0]]=unescape(strs[i].split("=")[1]); 
+				} 
+			} 
+			return theRequest; 
+		} 
+		function GetDateTime() {
+			var obj = new Date();
+			return (obj.getFullYear()+"/"+ol_pad(obj.getMonth()+1, 2)+"/"+ol_pad(obj.getDate(), 2)+" "+ol_pad(obj.getHours(),2)+":"+ol_pad(obj.getMinutes(),2)+":"+ol_pad(obj.getSeconds(),2));
+		}
+		
+		// 发送聊天信息
+		function OL_CleanInput() {
+			var obj = document.getElementById('msgsend');
+			obj.value = "";
+		}
+		function OL_ScrollChatWin() {
+			var obj = document.getElementById('msg');
+			obj.scrollTop = obj.scrollHeight;
+		}
+		function OL_SentAction() {
+			OL_ScrollChatWin();
+			OL_CleanInput();
+		}
+		function OL_CleanNotice() {
+			document.getElementById("notice").innerHTML = "";
+		}
+		function OL_SendMsg() {
+			var msg = document.getElementById("msgsend").value;
+			if(""==msg) {
+				alert("消息不能为空！")
+				return -1;
+			}
+			
+			send_msg(msg);
+			
+			document.getElementById("msg").innerHTML += "<p class='mymsg'>"+G_Name+": "+msg+"<span class='time'>"+GetDateTime()+"</span></p>";
+			
+			OL_SentAction();
+		}
+		
+		// 修改昵称
+		function OL_ModifyNickName() {
+			var newnickname = document.getElementById("newnickname").value;
+			if(""==newnickname) {
+				alert("新昵称不能为空！")
+				return -1;
+			}
+			
+			change_name(newnickname);
+			
+			document.getElementById("newnickname").value = "";
+		}
+		
+		// 通知
+		var NoticeTimer = null;
+		function OL_ShowNotice(msg, second) {
+			NoticeTimer = null;
+			document.getElementById("notice").innerHTML = "[消息] "+msg;
+			NoticeTimer = setTimeout("OL_CleanNotice()", second*1000)
+			
+			var history = document.getElementById("history");
+			history.innerHTML = "<p>[消息] "+msg+"<span class='time'>"+GetDateTime()+"</span></p>" + history.innerHTML
+		}
+		
+		
+		////////////////////////////////////////////////////////////////////
+		//启动
+		var socket = io.connect('http://127.0.0.1:3000');
+		
+		//发送消息
+		var Request = new Object(); 
+		Request = GetRequest(); 	
+		var G_Name = Request["name"];
+		if(null==G_Name) {
+			G_Name = "访客"+Math.ceil(Math.random()*10000);
+		}
+		socket.emit('join', G_Name, function (data) {
+			console.log(data);
+		});
+		
+		//监听
+		socket.on('login', function (data) {
+			console.log(data);
+			// 如果有重名的，要更改一个随机名称
+			G_Name = data.username;
+			document.getElementById("status").innerHTML = "欢迎您！"+G_Name;
+			document.getElementById("roomstatus").innerHTML = "当前聊天有"+data.numUsers+"人";
+		});
+		
+		socket.on('user_joined', function (data) {
+			console.log(data);
+			OL_ShowNotice(data.msg, 3);
+			document.getElementById("roomstatus").innerHTML = "当前聊天有"+data.numUsers+"人";
+		});
+		
+		socket.on('user_left', function (data) {
+			console.log(data);
+			OL_ShowNotice(data.msg, 3);
+			document.getElementById("roomstatus").innerHTML = "当前聊天有"+data.numUsers+"人";
+		});
+		
+		//修改昵称
+		function change_name(name){
+			socket.emit('change_name', name, function (data) {
+				console.log(data);
+			});
+		}
+		// 监听修改昵称后返回的消息
+		socket.on('name_changed', function (data) {
+			console.log(data);
+			document.getElementById("status").innerHTML = "欢迎您！"+G_Name;
+			OL_ShowNotice(data.msg, 3);
+		});
+		// 监听修改昵称后返回给修改者的消息
+		socket.on('name_changed_msg', function (data) {
+			console.log(data);
+			if("success"==data.res) {
+				document.getElementById("status").innerHTML = "欢迎您！"+data.newname;
+				OL_ShowNotice(data.msg, 3);
+			}
+			else {
+				OL_ShowNotice("修改昵称失败！"+data.error, 3);
+			}
+		});
+		
+		//发送消息
+		function send_msg(msg){
+			socket.emit('send_msg', msg, function (data) {
+				console.log(data);
+			});
+		}
+		// 监听消息
+		socket.on('msg_sent', function (data) {
+			console.log(data);
+			
+			document.getElementById("msg").innerHTML += "<p>"+data.username+": "+data.msg+"<span class='time'>"+GetDateTime()+"</span></p>";
+			OL_ScrollChatWin();
+		});
+
+		
+		
+		
+		

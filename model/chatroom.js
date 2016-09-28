@@ -12,12 +12,23 @@
 var socketio = require('socket.io');
 var io;
 var guest_num = 0;
-var userlist = {};
-var username_occupied = [];
+var userlist = new Array();
+var username_occupied = new Array();
 var roomlist = {};
 
 // 外部接口
 exports.listen = function(server) {
+	
+	// 移除数组元素
+	var removeArr = function(arr, ele) {
+		var new_arr = new Array();
+		for(var i=0; i<arr.length; i++) {
+			if(ele != arr[i]) {
+				new_arr.push(arr[i])
+			}
+		}
+		return new_arr;
+	}
 	
 	io = socketio(server);
 	
@@ -30,9 +41,17 @@ exports.listen = function(server) {
 		if (addedUser) return;
 		  
 		// 用户信息存储在socket会话中
+		for(var i=0; i<userlist.length; i++) {
+			if(userlist[i] == username) {
+				username = username+Math.ceil(Math.random()*10000);
+				break;
+			}
+		}
 		socket.username = username;
 		++guest_num;
 		addedUser = true;
+		
+		userlist.push(username)
 		
 		// 告知用户登录成功
 		socket.emit('login', {
@@ -54,6 +73,9 @@ exports.listen = function(server) {
 	  socket.on('disconnect', function () {
 		if (addedUser) {
 		  --guest_num;
+		  
+		  userlist = removeArr(userlist, socket.username)
+		  console.log(userlist)
 
 		  // 告知所有用户
 		  socket.broadcast.emit('user_left', {
@@ -70,7 +92,38 @@ exports.listen = function(server) {
 	  socket.on('change_name', function (newname) {
 		if (addedUser) {
 			var oldname = socket.username;
-			socket.username = newname;
+			console.log(userlist)
+			
+			for(var i=0; i<userlist.length; i++) {
+				if(userlist[i] == newname) {
+					// 通知该用户修改成功
+					socket.emit('name_changed_msg', {
+						res: "failed",
+						error: "已有此用户："+newname,
+						oldname: oldname,
+						newname: newname,
+						type: "RETURN"
+					});
+					return -1;
+				}
+			}
+			// 通知该用户修改成功
+			socket.emit('name_changed_msg', {
+				res: "success",
+				error: null,
+				oldname: oldname,
+				newname: newname,
+				msg: "["+oldname+"] 改名为 ["+socket.username + "]",
+				type: "RETURN",
+				numUsers: guest_num
+			});
+			
+			for(var i=0; i<userlist.length; i++) {
+				if(userlist[i] == oldname) {
+					userlist[i] = newname;
+					socket.username = newname;
+				}
+			}
 
 			// 告知所有用户
 			socket.broadcast.emit('name_changed', {
